@@ -41,3 +41,15 @@ def test_models_list_endpoint():
     assert posts_field["type"] == "relation"
     assert posts_field["relatedModel"] == "BlogPost"
     assert posts_field["relationType"] == "one-to-many"
+
+    # Verify BlogPost JSONB and indexing representation
+    blog_model = next((m for m in data if m["name"] == "BlogPost"), None)
+    assert blog_model is not None
+    assert blog_model["tableName"] == "blog_posts"
+    
+    blog_fields = blog_model["fields"]
+    metadata_field = next((f for f in blog_fields if f["name"] == "metadata"), None)
+    assert metadata_field is not None
+    assert metadata_field["kind"] == "json"
+    assert metadata_field["type"] == "jsonb"
+
