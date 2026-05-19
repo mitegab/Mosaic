@@ -51,5 +51,48 @@ class PostgresIntrospector:
             logger.error("get_views_catalog_failed", error=str(e))
             return []
 
+    def get_columns(self, table_name):
+        """
+        Fetches columns for the given table name, return list of dicts with:
+        name, data_type, nullable, primary_key.
+        """
+        query = """
+            SELECT 
+                c.column_name, 
+                c.data_type, 
+                c.is_nullable,
+                CASE WHEN kcu.column_name IS NOT NULL THEN TRUE ELSE FALSE END as is_primary_key
+            FROM information_schema.columns c
+            LEFT JOIN information_schema.key_column_usage kcu 
+              ON c.table_name = kcu.table_name 
+              AND c.column_name = kcu.column_name 
+              AND c.table_schema = kcu.table_schema
+              AND kcu.constraint_name IN (
+                  SELECT constraint_name 
+                  FROM information_schema.table_constraints 
+                  WHERE table_name = c.table_name 
+                    AND table_schema = c.table_schema 
+                    AND constraint_type = 'PRIMARY KEY'
+              )
+            WHERE c.table_schema = 'public' AND c.table_name = %s
+            ORDER BY c.ordinal_position;
+        """
+        try:
+            self.cursor.execute(query, [table_name])
+            rows = self.cursor.fetchall()
+            columns = []
+            for row in rows:
+                columns.append({
+                    "name": row[0],
+                    "data_type": row[1],
+                    "nullable": row[2] == "YES",
+                    "primary_key": bool(row[3])
+                })
+            logger.debug("introspected_table_columns", table_name=table_name, count=len(columns), columns=columns)
+            return columns
+        except Exception as e:
+            logger.error("get_columns_catalog_failed", table_name=table_name, error=str(e))
+            return []
+
     def close(self):
         self.cursor.close()
