@@ -397,18 +397,20 @@ class PostgresIntrospector:
         Returns a list of SchemaModel objects.
         """
         from mosaic_core.schemas import SchemaModel, SchemaField
+        from mosaic_core.utils import track_queries
         
-        tables = self.get_tables()
-        fks = self.get_all_foreign_keys()
-        
-        schema_models = []
-        
-        table_descriptions = {
-            "auth_users": "User registration and authentication table",
-            "user_profiles": "User profile details and contact information",
-            "blog_posts": "Blog posts published by users",
-            "post_comments": "Comments and ratings on blog posts"
-        }
+        with track_queries("schema_introspection"):
+            tables = self.get_tables()
+            fks = self.get_all_foreign_keys()
+            
+            schema_models = []
+            
+            table_descriptions = {
+                "auth_users": "User registration and authentication table",
+                "user_profiles": "User profile details and contact information",
+                "blog_posts": "Blog posts published by users",
+                "post_comments": "Comments and ratings on blog posts"
+            }
         
         # Helper to convert table to model name
         def table_to_model_name(t_name):

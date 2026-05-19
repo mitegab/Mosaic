@@ -214,3 +214,22 @@ def test_introspector_serialize_schema():
     finally:
         introspector.close()
 
+
+@pytest.mark.django_db
+def test_track_queries_context_manager():
+    from mosaic_core.utils import track_queries
+    from django.db import connection
+    
+    with track_queries("test_op") as queries:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1;")
+            cursor.fetchone()
+            cursor.execute("SELECT 2;")
+            cursor.fetchone()
+            
+    assert len(queries) == 2
+    assert "SELECT 1;" in queries[0]["sql"]
+    assert "SELECT 2;" in queries[1]["sql"]
+    assert queries[0]["duration_ms"] > 0
+
+
