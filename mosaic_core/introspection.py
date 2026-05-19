@@ -85,6 +85,7 @@ class PostgresIntrospector:
                 columns.append({
                     "name": row[0],
                     "data_type": row[1],
+                    "kind": self.normalize_type(row[1]),
                     "nullable": row[2] == "YES",
                     "primary_key": bool(row[3])
                 })
@@ -93,6 +94,27 @@ class PostgresIntrospector:
         except Exception as e:
             logger.error("get_columns_catalog_failed", table_name=table_name, error=str(e))
             return []
+
+    def normalize_type(self, db_type):
+        """
+        Maps PostgreSQL raw types to standardized frontend kind:
+        'string' | 'number' | 'boolean' | 'date' | 'datetime' | 'json' | 'relation' | 'unknown'
+        """
+        db_type = db_type.lower().strip()
+        if db_type in ("integer", "bigint", "smallint", "numeric", "double precision", "real", "serial", "bigserial"):
+            return "number"
+        elif db_type in ("boolean", "bool"):
+            return "boolean"
+        elif db_type in ("date",):
+            return "date"
+        elif "timestamp" in db_type or "timestamptz" in db_type or db_type in ("timestamp without time zone", "timestamp with time zone"):
+            return "datetime"
+        elif db_type in ("jsonb", "json"):
+            return "json"
+        elif any(t in db_type for t in ("character", "char", "varchar", "text", "uuid", "varying")):
+            return "string"
+        else:
+            return "unknown"
 
     def close(self):
         self.cursor.close()
