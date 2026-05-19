@@ -153,3 +153,29 @@ def test_dsl_validator_field_existence():
     assert any("does not exist on model 'User'" in e for e in res_invalid_filter["errors"])
 
 
+@pytest.mark.django_db
+def test_dsl_validator_operators():
+    from mosaic_core.validator import DslValidator
+    validator = DslValidator()
+
+    # Valid operator 'icontains' on string field 'email'
+    dsl_valid = QueryDsl.model_validate({
+        "model": "User",
+        "filters": [{"field": "email", "operator": "icontains", "value": "gmail.com"}],
+        "limit": 10
+    })
+    res_valid = validator.validate(dsl_valid)
+    assert res_valid["valid"] is True
+
+    # Invalid operator 'gt' on boolean field 'is_active'
+    dsl_invalid = QueryDsl.model_validate({
+        "model": "User",
+        "filters": [{"field": "is_active", "operator": "gt", "value": True}],
+        "limit": 10
+    })
+    res_invalid = validator.validate(dsl_invalid)
+    assert res_invalid["valid"] is False
+    assert any("Operator 'gt' is not compatible with field 'is_active' of kind 'boolean'" in e for e in res_invalid["errors"])
+
+
+
