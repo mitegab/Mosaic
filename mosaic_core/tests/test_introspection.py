@@ -134,3 +134,13 @@ def test_introspector_get_relations():
         assert post_types["comments"] == "one-to-many"
     finally:
         introspector.close()
+
+@pytest.mark.django_db
+def test_introspector_get_row_estimate():
+    introspector = PostgresIntrospector()
+    try:
+        est = introspector.get_row_estimate("auth_users")
+        assert isinstance(est, int)
+        assert est >= 0
+    finally:
+        introspector.close()

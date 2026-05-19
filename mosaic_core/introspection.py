@@ -341,5 +341,23 @@ class PostgresIntrospector:
                 
         return relations
 
+    def get_row_estimate(self, table_name):
+        """
+        Fetches the estimated row count for the table from pg_class.reltuples.
+        """
+        query = "SELECT reltuples FROM pg_class WHERE relname = %s;"
+        try:
+            self.cursor.execute(query, [table_name])
+            row = self.cursor.fetchone()
+            if row:
+                # reltuples is a float/real in pg, cast to int
+                val = int(row[0])
+                # sometimes un-analyzed tables can show -1
+                return max(0, val)
+            return 0
+        except Exception as e:
+            logger.error("get_row_estimate_failed", table_name=table_name, error=str(e))
+            return 0
+
     def close(self):
         self.cursor.close()
