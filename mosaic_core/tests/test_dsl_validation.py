@@ -93,3 +93,25 @@ def test_pydantic_validation_failures():
     with pytest.raises(ValidationError) as exc:
         QueryDsl.model_validate({"model": "User", "offset": -1})
     assert "offset" in str(exc.value)
+
+
+@pytest.mark.django_db
+def test_dsl_validator_model_presence():
+    from mosaic_core.validator import DslValidator
+    
+    # Initialize validator dynamically (loads live Postgres schema)
+    validator = DslValidator()
+    
+    # Valid model User
+    dsl_valid = QueryDsl.model_validate({"model": "User"})
+    res_valid = validator.validate(dsl_valid)
+    assert res_valid["valid"] is True
+    assert len(res_valid["errors"]) == 0
+    
+    # Invalid model NonExistent
+    dsl_invalid = QueryDsl.model_validate({"model": "NonExistent"})
+    res_invalid = validator.validate(dsl_invalid)
+    assert res_invalid["valid"] is False
+    assert len(res_invalid["errors"]) == 1
+    assert "Model 'NonExistent' does not exist" in res_invalid["errors"][0]
+
