@@ -64,4 +64,15 @@ def test_models_list_endpoint():
     assert author_field["relatedModel"] == "User"
     assert author_field["relationType"] == "many-to-one"
 
+    # Verify data sampling outputs
+    assert "sampleRows" in user_model
+    user_samples = user_model["sampleRows"]
+    assert isinstance(user_samples, list)
+    if len(user_samples) > 0:
+        sample = user_samples[0]
+        assert "id" in sample
+        assert "email" in sample
+        assert "username" in sample
+
+
 
