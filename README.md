@@ -8,3 +8,9 @@ Mosaic Core is a high-performance Django + Django REST Framework + PostgreSQL en
 - **Validation:** Pydantic v2
 - **Testing:** PyTest + pytest-django + factory_boy
 - **Logging & Monitoring:** Python logging + structlog + Django Debug Toolbar (dev)
+
+## 💾 Database Setup
+The database runs on local PostgreSQL 18.
+- Database name: `mosaic_db`
+- Connection URL: `postgres://postgres:123@localhost:5432/mosaic_db`
+
