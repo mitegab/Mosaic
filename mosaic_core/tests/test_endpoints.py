@@ -74,5 +74,15 @@ def test_models_list_endpoint():
         assert "email" in sample
         assert "username" in sample
 
+    # Verify exact keys conformity to prevent payload shape regression
+    for model in data:
+        for field in model["fields"]:
+            field_keys = set(field.keys())
+            if field["kind"] == "relation":
+                assert field_keys == {"name", "type", "kind", "relatedModel", "relationType"}
+            else:
+                assert field_keys == {"name", "type", "kind", "primaryKey", "nullable"}
+
+
 
 
