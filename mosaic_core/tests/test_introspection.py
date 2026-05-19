@@ -144,3 +144,17 @@ def test_introspector_get_row_estimate():
         assert est >= 0
     finally:
         introspector.close()
+
+@pytest.mark.django_db
+def test_introspector_get_sample_data():
+    introspector = PostgresIntrospector()
+    try:
+        samples = introspector.get_sample_data("auth_users", limit=2)
+        assert isinstance(samples, list)
+        assert len(samples) <= 2
+        if len(samples) > 0:
+            assert "id" in samples[0]
+            assert "email" in samples[0]
+            assert "username" in samples[0]
+    finally:
+        introspector.close()

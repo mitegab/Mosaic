@@ -359,5 +359,37 @@ class PostgresIntrospector:
             logger.error("get_row_estimate_failed", table_name=table_name, error=str(e))
             return 0
 
+    def get_sample_data(self, table_name, limit=3):
+        """
+        Fetches up to limit random rows from the table.
+        Returns a list of dicts.
+        """
+        # Validate that table exists to prevent SQL injection on table name
+        tables = self.get_tables() + self.get_views()
+        if table_name not in tables:
+            logger.warning("sample_data_table_not_found_or_invalid", table_name=table_name)
+            return []
+
+        # Safely query table
+        query = f'SELECT * FROM "{table_name}" ORDER BY random() LIMIT %s;'
+        try:
+            self.cursor.execute(query, [limit])
+            rows = self.cursor.fetchall()
+            desc = self.cursor.description
+            colnames = [d[0] for d in desc]
+            
+            samples = []
+            for row in rows:
+                row_dict = {}
+                for colname, val in zip(colnames, row):
+                    row_dict[colname] = val
+                samples.append(row_dict)
+            
+            logger.debug("introspected_table_samples", table_name=table_name, count=len(samples))
+            return samples
+        except Exception as e:
+            logger.error("get_sample_data_failed", table_name=table_name, error=str(e))
+            return []
+
     def close(self):
         self.cursor.close()
