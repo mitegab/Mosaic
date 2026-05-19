@@ -95,3 +95,17 @@ def test_introspector_get_indexes():
         assert any(idx["type"] == "gin" for idx in metadata_idx)
     finally:
         introspector.close()
+
+@pytest.mark.django_db
+def test_introspector_get_all_foreign_keys():
+    introspector = PostgresIntrospector()
+    try:
+        fks = introspector.get_all_foreign_keys()
+        assert len(fks) > 0
+        
+        # Verify BlogPost -> User foreign key is present
+        post_to_user = next(fk for fk in fks if fk["source_table"] == "blog_posts" and fk["target_table"] == "auth_users")
+        assert post_to_user["source_column"] == "author_id"
+        assert post_to_user["target_column"] == "id"
+    finally:
+        introspector.close()

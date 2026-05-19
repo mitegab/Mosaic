@@ -199,5 +199,45 @@ class PostgresIntrospector:
             logger.error("get_indexes_catalog_failed", table_name=table_name, error=str(e))
             return {}
 
+    def get_all_foreign_keys(self):
+        """
+        Fetches all foreign key constraints in the public schema.
+        Returns a list of dicts with constraint_name, source_table, source_column, target_table, target_column.
+        """
+        query = """
+            SELECT
+                tc.constraint_name,
+                tc.table_name AS source_table,
+                kcu.column_name AS source_column,
+                ccu.table_name AS target_table,
+                ccu.column_name AS target_column
+            FROM
+                information_schema.table_constraints AS tc
+            JOIN information_schema.key_column_usage AS kcu
+              ON tc.constraint_name = kcu.constraint_name
+              AND tc.table_schema = kcu.table_schema
+            JOIN information_schema.constraint_column_usage AS ccu
+              ON ccu.constraint_name = tc.constraint_name
+              AND ccu.table_schema = tc.table_schema
+            WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = 'public';
+        """
+        try:
+            self.cursor.execute(query)
+            rows = self.cursor.fetchall()
+            fks = []
+            for row in rows:
+                fks.append({
+                    "constraint_name": row[0],
+                    "source_table": row[1],
+                    "source_column": row[2],
+                    "target_table": row[3],
+                    "target_column": row[4]
+                })
+            logger.debug("introspected_all_foreign_keys", count=len(fks), fks=fks)
+            return fks
+        except Exception as e:
+            logger.error("get_all_foreign_keys_failed", error=str(e))
+            return []
+
     def close(self):
         self.cursor.close()
