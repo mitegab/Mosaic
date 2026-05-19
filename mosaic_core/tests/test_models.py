@@ -36,7 +36,7 @@ def test_model_fields_and_relationships():
 
 @pytest.mark.django_db
 def test_jsonb_and_index_presence():
-    # Introspect PostgreSQL catalog to verify GIN/BTree index presence physically
+    # Introspect PostgreSQL pg_indexes catalog to physically assert GIN and BTree index configurations
     with connection.cursor() as cursor:
         # Check index type on blog_posts metadata field
         cursor.execute("""
