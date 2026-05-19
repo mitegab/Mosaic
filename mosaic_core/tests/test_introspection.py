@@ -109,3 +109,28 @@ def test_introspector_get_all_foreign_keys():
         assert post_to_user["target_column"] == "id"
     finally:
         introspector.close()
+
+@pytest.mark.django_db
+def test_introspector_get_relations():
+    introspector = PostgresIntrospector()
+    try:
+        fks = introspector.get_all_foreign_keys()
+        
+        # User relations check
+        user_rels = introspector.get_relations("auth_users", fks)
+        # Should have profile (one-to-one) and posts (one-to-many)
+        rel_types = {r["name"]: r["relationType"] for r in user_rels}
+        assert "profile" in rel_types
+        assert rel_types["profile"] == "one-to-one"
+        assert "posts" in rel_types
+        assert rel_types["posts"] == "one-to-many"
+        
+        # BlogPost relations check
+        post_rels = introspector.get_relations("blog_posts", fks)
+        post_types = {r["name"]: r["relationType"] for r in post_rels}
+        assert "author" in post_types
+        assert post_types["author"] == "many-to-one"
+        assert "comments" in post_types
+        assert post_types["comments"] == "one-to-many"
+    finally:
+        introspector.close()

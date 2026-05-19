@@ -239,5 +239,107 @@ class PostgresIntrospector:
             logger.error("get_all_foreign_keys_failed", error=str(e))
             return []
 
+    def get_relations(self, table_name, all_fks):
+        """
+        Solves relationships for the table based on foreign keys.
+        Returns a list of dicts matching SchemaField shape:
+        {
+          "name": str,
+          "type": "relation",
+          "kind": "relation",
+          "relatedModel": str,
+          "relationType": "one-to-one" | "one-to-many" | "many-to-one" | "many-to-many"
+        }
+        """
+        relations = []
+        
+        # Helper to convert table to model name
+        def table_to_model_name(t_name):
+            mapping = {
+                "auth_users": "User",
+                "user_profiles": "UserProfile",
+                "blog_posts": "BlogPost",
+                "post_comments": "PostComment"
+            }
+            if t_name in mapping:
+                return mapping[t_name]
+            return "".join(part.capitalize() for part in t_name.split("_"))
+
+        # Fetch index and constraint details for checking uniqueness
+        indexes = self.get_indexes(table_name)
+        constraints = self.get_constraints(table_name)
+        
+        # Outgoing foreign keys (Many-to-One or One-to-One)
+        for fk in all_fks:
+            if fk["source_table"] == table_name:
+                col = fk["source_column"]
+                target_table = fk["target_table"]
+                
+                # Determine if col has a unique constraint or index
+                is_unique = False
+                if col in indexes and any(idx["is_unique"] for idx in indexes[col]):
+                    is_unique = True
+                if col in constraints and any(c["type"] == "UNIQUE" for c in constraints[col]):
+                    is_unique = True
+                
+                rel_type = "one-to-one" if is_unique else "many-to-one"
+                
+                # Name the relation: e.g. "author_id" -> "author"
+                rel_name = col
+                if rel_name.endswith("_id"):
+                    rel_name = rel_name[:-3]
+                
+                relations.append({
+                    "name": rel_name,
+                    "type": "relation",
+                    "kind": "relation",
+                    "relatedModel": table_to_model_name(target_table),
+                    "relationType": rel_type
+                })
+                
+            elif fk["target_table"] == table_name:
+                # Incoming foreign keys (One-to-Many or One-to-One reverse)
+                source_table = fk["source_table"]
+                source_col = fk["source_column"]
+                
+                # Need to check uniqueness of source column on source table
+                src_indexes = self.get_indexes(source_table)
+                src_constraints = self.get_constraints(source_table)
+                
+                is_unique = False
+                if source_col in src_indexes and any(idx["is_unique"] for idx in src_indexes[source_col]):
+                    is_unique = True
+                if source_col in src_constraints and any(c["type"] == "UNIQUE" for c in src_constraints[source_col]):
+                    is_unique = True
+                
+                if is_unique:
+                    rel_type = "one-to-one"
+                    # Name reverse: e.g. "profile"
+                    rel_name = source_table
+                    if rel_name.startswith("user_"):
+                        rel_name = rel_name[5:]
+                    if rel_name.endswith("s") and not rel_name.endswith("ss"):
+                        rel_name = rel_name[:-1]
+                else:
+                    rel_type = "one-to-many"
+                    # Name reverse: e.g. "posts", "comments"
+                    rel_name = source_table
+                    if rel_name == "blog_posts":
+                        rel_name = "posts"
+                    elif rel_name == "post_comments":
+                        rel_name = "comments"
+                    elif rel_name == "user_profiles":
+                        rel_name = "profiles"
+                
+                relations.append({
+                    "name": rel_name,
+                    "type": "relation",
+                    "kind": "relation",
+                    "relatedModel": table_to_model_name(source_table),
+                    "relationType": rel_type
+                })
+                
+        return relations
+
     def close(self):
         self.cursor.close()
