@@ -230,5 +230,44 @@ def test_dsl_validator_relations():
     assert any("Field 'non_existent_post_col' does not exist on model 'BlogPost'" in e for e in res_invalid_fields["errors"])
 
 
+@pytest.mark.django_db
+def test_dsl_validator_warnings():
+    from mosaic_core.validator import DslValidator
+    validator = DslValidator()
+
+    # Warning for missing limit
+    dsl_no_limit = QueryDsl.model_validate({
+        "model": "User",
+        "select": ["id", "email"]
+    })
+    res_no_limit = validator.validate(dsl_no_limit)
+    assert res_no_limit["valid"] is True  # still valid!
+    assert len(res_no_limit["errors"]) == 0
+    assert any("limit" in w for w in res_no_limit["warnings"])
+
+    # Warning for unindexed field 'bio' on UserProfile
+    dsl_unindexed = QueryDsl.model_validate({
+        "model": "UserProfile",
+        "filters": [{"field": "bio", "operator": "exact", "value": "developer"}],
+        "limit": 10
+    })
+    res_unindexed = validator.validate(dsl_unindexed)
+    assert res_unindexed["valid"] is True  # still valid!
+    assert len(res_unindexed["errors"]) == 0
+    assert any("bio" in w and "not indexed" in w for w in res_unindexed["warnings"])
+
+    # Warning for icontains slow trigram on string field
+    dsl_trigram = QueryDsl.model_validate({
+        "model": "User",
+        "filters": [{"field": "email", "operator": "icontains", "value": "gmail.com"}],
+        "limit": 10
+    })
+    res_trigram = validator.validate(dsl_trigram)
+    assert res_trigram["valid"] is True
+    assert len(res_trigram["errors"]) == 0
+    assert any("icontains" in w and "trigram" in w for w in res_trigram["warnings"])
+
+
+
 
 
