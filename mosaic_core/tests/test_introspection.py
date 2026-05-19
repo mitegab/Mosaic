@@ -233,3 +233,37 @@ def test_track_queries_context_manager():
     assert queries[0]["duration_ms"] > 0
 
 
+@pytest.mark.django_db
+def test_introspector_benchmark_latency():
+    import time
+    import structlog
+    logger = structlog.get_logger(__name__)
+    
+    introspector = PostgresIntrospector()
+    try:
+        # Warmup execution
+        introspector.introspect_schema()
+        
+        runs = 10
+        durations = []
+        
+        for _ in range(runs):
+            start = time.perf_counter()
+            introspector.introspect_schema()
+            durations.append(time.perf_counter() - start)
+            
+        avg_duration_sec = sum(durations) / runs
+        logger.info(
+            "introspector_benchmark_metrics",
+            runs=runs,
+            durations_seconds=durations,
+            average_duration_ms=avg_duration_sec * 1000.0
+        )
+        
+        # Verify schema introspection runs extremely fast (less than 300ms)
+        assert avg_duration_sec < 0.3
+    finally:
+        introspector.close()
+
+
+
