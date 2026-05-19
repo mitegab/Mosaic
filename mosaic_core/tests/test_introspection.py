@@ -77,3 +77,21 @@ def test_introspector_get_constraints():
         assert "email" in constraints or "username" in constraints
     finally:
         introspector.close()
+
+@pytest.mark.django_db
+def test_introspector_get_indexes():
+    introspector = PostgresIntrospector()
+    try:
+        # Check BTree on auth_users email
+        indexes = introspector.get_indexes("auth_users")
+        assert "email" in indexes
+        email_idx = indexes["email"]
+        assert any(idx["type"] == "btree" for idx in email_idx)
+        
+        # Check GIN index on blog_posts metadata
+        post_indexes = introspector.get_indexes("blog_posts")
+        assert "metadata" in post_indexes
+        metadata_idx = post_indexes["metadata"]
+        assert any(idx["type"] == "gin" for idx in metadata_idx)
+    finally:
+        introspector.close()

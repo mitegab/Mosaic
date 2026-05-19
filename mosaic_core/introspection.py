@@ -152,5 +152,52 @@ class PostgresIntrospector:
             logger.error("get_constraints_catalog_failed", table_name=table_name, error=str(e))
             return {}
 
+    def get_indexes(self, table_name):
+        """
+        Fetches indexes (BTree, GIN, etc.) for columns of the given table.
+        Returns a dict mapping column names to index lists.
+        """
+        query = """
+            SELECT
+                i.relname AS index_name,
+                a.attname AS column_name,
+                am.amname AS index_type,
+                ix.indisunique AS is_unique
+            FROM
+                pg_class t
+            JOIN
+                pg_index ix ON t.oid = ix.indrelid
+            JOIN
+                pg_class i ON i.oid = ix.indexrelid
+            JOIN
+                pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
+            JOIN
+                pg_am am ON i.relam = am.oid
+            WHERE
+                t.relkind = 'r'
+                AND t.relname = %s;
+        """
+        try:
+            self.cursor.execute(query, [table_name])
+            rows = self.cursor.fetchall()
+            indexes = {}
+            for row in rows:
+                idx_name = row[0]
+                col = row[1]
+                idx_type = row[2]
+                is_unique = bool(row[3])
+                if col not in indexes:
+                    indexes[col] = []
+                indexes[col].append({
+                    "name": idx_name,
+                    "type": idx_type,
+                    "is_unique": is_unique
+                })
+            logger.debug("introspected_table_indexes", table_name=table_name, count=len(indexes), indexes=indexes)
+            return indexes
+        except Exception as e:
+            logger.error("get_indexes_catalog_failed", table_name=table_name, error=str(e))
+            return {}
+
     def close(self):
         self.cursor.close()
