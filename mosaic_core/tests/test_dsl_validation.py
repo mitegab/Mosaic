@@ -178,4 +178,57 @@ def test_dsl_validator_operators():
     assert any("Operator 'gt' is not compatible with field 'is_active' of kind 'boolean'" in e for e in res_invalid["errors"])
 
 
+@pytest.mark.django_db
+def test_dsl_validator_relations():
+    from mosaic_core.validator import DslValidator
+    validator = DslValidator()
+
+    # Valid relation path: User has posts
+    dsl_valid = QueryDsl.model_validate({
+        "model": "User",
+        "relations": [
+            {
+                "relation": "posts",
+                "select": ["id", "title"],
+                "filters": [{"field": "status", "operator": "exact", "value": "published"}]
+            }
+        ],
+        "limit": 10
+    })
+    res_valid = validator.validate(dsl_valid)
+    assert res_valid["valid"] is True
+    assert len(res_valid["errors"]) == 0
+
+    # Invalid relation: User has no 'non_existent_relation'
+    dsl_invalid_rel = QueryDsl.model_validate({
+        "model": "User",
+        "relations": [
+            {
+                "relation": "non_existent_relation",
+                "select": ["id"]
+            }
+        ],
+        "limit": 10
+    })
+    res_invalid_rel = validator.validate(dsl_invalid_rel)
+    assert res_invalid_rel["valid"] is False
+    assert any("Relation 'non_existent_relation' does not exist on model 'User'" in e for e in res_invalid_rel["errors"])
+
+    # Invalid fields inside related model select list
+    dsl_invalid_fields = QueryDsl.model_validate({
+        "model": "User",
+        "relations": [
+            {
+                "relation": "posts",
+                "select": ["id", "non_existent_post_col"]
+            }
+        ],
+        "limit": 10
+    })
+    res_invalid_fields = validator.validate(dsl_invalid_fields)
+    assert res_invalid_fields["valid"] is False
+    assert any("Field 'non_existent_post_col' does not exist on model 'BlogPost'" in e for e in res_invalid_fields["errors"])
+
+
+
 
