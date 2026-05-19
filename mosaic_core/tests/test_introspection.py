@@ -184,3 +184,33 @@ def test_introspector_schema_mapping():
         assert post_field.relationType == "one-to-many"
     finally:
         introspector.close()
+
+
+@pytest.mark.django_db
+def test_introspector_serialize_schema():
+    introspector = PostgresIntrospector()
+    try:
+        models = introspector.introspect_schema()
+        serialized = introspector.serialize_schema(models)
+        assert isinstance(serialized, list)
+        assert len(serialized) > 0
+        
+        user_ser = next(m for m in serialized if m["name"] == "User")
+        assert user_ser["tableName"] == "auth_users"
+        
+        # Verify that None values are omitted
+        for field in user_ser["fields"]:
+            # A field should not have None values
+            assert None not in field.values()
+            
+            # Non-relation fields should not have relatedModel or relationType
+            if field["kind"] != "relation":
+                assert "relatedModel" not in field
+                assert "relationType" not in field
+            else:
+                # Relation fields should not have primaryKey or nullable
+                assert "primaryKey" not in field
+                assert "nullable" not in field
+    finally:
+        introspector.close()
+

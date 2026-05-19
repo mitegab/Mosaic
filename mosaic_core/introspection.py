@@ -465,5 +465,11 @@ class PostgresIntrospector:
             
         return schema_models
 
+    def serialize_schema(self, models):
+        """
+        Serializes introspected SchemaModel Pydantic objects to list of dictionaries.
+        """
+        return [m.model_dump(exclude_none=True) for m in models]
+
     def close(self):
         self.cursor.close()
