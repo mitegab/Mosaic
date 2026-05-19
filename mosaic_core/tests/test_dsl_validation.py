@@ -115,3 +115,41 @@ def test_dsl_validator_model_presence():
     assert len(res_invalid["errors"]) == 1
     assert "Model 'NonExistent' does not exist" in res_invalid["errors"][0]
 
+
+@pytest.mark.django_db
+def test_dsl_validator_field_existence():
+    from mosaic_core.validator import DslValidator
+    validator = DslValidator()
+    
+    # Valid fields in select and filters
+    dsl = QueryDsl.model_validate({
+        "model": "User",
+        "select": ["id", "email"],
+        "filters": [{"field": "email", "operator": "exact", "value": "test@example.com"}],
+        "limit": 10
+    })
+    res = validator.validate(dsl)
+    assert res["valid"] is True
+    assert len(res["errors"]) == 0
+    
+    # Invalid select field
+    dsl_invalid_select = QueryDsl.model_validate({
+        "model": "User",
+        "select": ["id", "non_existent_field"],
+        "limit": 10
+    })
+    res_invalid_select = validator.validate(dsl_invalid_select)
+    assert res_invalid_select["valid"] is False
+    assert any("does not exist on model 'User'" in e for e in res_invalid_select["errors"])
+    
+    # Invalid filter field
+    dsl_invalid_filter = QueryDsl.model_validate({
+        "model": "User",
+        "filters": [{"field": "invalid_filter_col", "operator": "exact", "value": "val"}],
+        "limit": 10
+    })
+    res_invalid_filter = validator.validate(dsl_invalid_filter)
+    assert res_invalid_filter["valid"] is False
+    assert any("does not exist on model 'User'" in e for e in res_invalid_filter["errors"])
+
+
