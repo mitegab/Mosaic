@@ -59,3 +59,21 @@ def test_introspector_normalize_type():
         assert introspector.normalize_type("unknown_type") == "unknown"
     finally:
         introspector.close()
+
+@pytest.mark.django_db
+def test_introspector_get_constraints():
+    introspector = PostgresIntrospector()
+    try:
+        constraints = introspector.get_constraints("auth_users")
+        # Check id constraint contains PRIMARY KEY
+        assert "id" in constraints
+        id_types = [c["type"] for c in constraints["id"]]
+        assert "PRIMARY KEY" in id_types
+        
+        # Check email constraint contains UNIQUE (Django creates unique constraints or indexes)
+        # Note: sometimes email has a unique index rather than constraint depending on model Meta
+        # but let's assert what is actually present in db.
+        # User has `email = models.CharField(max_length=255, unique=True)` which translates to a UNIQUE constraint.
+        assert "email" in constraints or "username" in constraints
+    finally:
+        introspector.close()

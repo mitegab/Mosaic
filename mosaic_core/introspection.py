@@ -116,5 +116,41 @@ class PostgresIntrospector:
         else:
             return "unknown"
 
+    def get_constraints(self, table_name):
+        """
+        Fetches constraints for the given table: primary keys, unique constraints.
+        Returns a dict mapping column names to constraint lists.
+        """
+        query = """
+            SELECT 
+                kcu.column_name,
+                tc.constraint_type,
+                tc.constraint_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu 
+              ON tc.constraint_name = kcu.constraint_name
+              AND tc.table_schema = kcu.table_schema
+            WHERE tc.table_schema = 'public' AND tc.table_name = %s;
+        """
+        try:
+            self.cursor.execute(query, [table_name])
+            rows = self.cursor.fetchall()
+            constraints = {}
+            for row in rows:
+                col = row[0]
+                const_type = row[1]
+                const_name = row[2]
+                if col not in constraints:
+                    constraints[col] = []
+                constraints[col].append({
+                    "type": const_type,
+                    "name": const_name
+                })
+            logger.debug("introspected_table_constraints", table_name=table_name, count=len(constraints), constraints=constraints)
+            return constraints
+        except Exception as e:
+            logger.error("get_constraints_catalog_failed", table_name=table_name, error=str(e))
+            return {}
+
     def close(self):
         self.cursor.close()
