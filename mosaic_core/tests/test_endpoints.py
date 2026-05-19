@@ -53,3 +53,15 @@ def test_models_list_endpoint():
     assert metadata_field["kind"] == "json"
     assert metadata_field["type"] == "jsonb"
 
+    # Verify primary key and relation mappings on BlogPost
+    id_field = next((f for f in blog_fields if f["name"] == "id"), None)
+    assert id_field is not None
+    assert id_field["primaryKey"] is True
+
+    author_field = next((f for f in blog_fields if f["name"] == "author"), None)
+    assert author_field is not None
+    assert author_field["kind"] == "relation"
+    assert author_field["relatedModel"] == "User"
+    assert author_field["relationType"] == "many-to-one"
+
+
