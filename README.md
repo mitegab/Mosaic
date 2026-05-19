@@ -14,3 +14,9 @@ The database runs on local PostgreSQL 18.
 - Database name: `mosaic_db`
 - Connection URL: `postgres://postgres:123@localhost:5432/mosaic_db`
 
+To run database migrations:
+```bash
+python manage.py migrate
+```
+Migrations have been successfully initialized and applied to the database.
+
