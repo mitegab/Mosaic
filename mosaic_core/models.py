@@ -15,3 +15,16 @@ class User(models.Model):
 
     def __str__(self):
         return self.username
+
+
+class UserProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    bio = models.TextField(blank=True, null=True)
+    avatar_url = models.CharField(max_length=500, blank=True, null=True)
+    phone = models.CharField(max_length=50, blank=True, null=True)
+
+    class Meta:
+        db_table = 'user_profiles'
+
+    def __str__(self):
+        return f"Profile of {self.user.username}"
