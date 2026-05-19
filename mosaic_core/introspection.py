@@ -391,5 +391,79 @@ class PostgresIntrospector:
             logger.error("get_sample_data_failed", table_name=table_name, error=str(e))
             return []
 
+    def introspect_schema(self):
+        """
+        Runs the full database catalog schema discovery pipeline.
+        Returns a list of SchemaModel objects.
+        """
+        from mosaic_core.schemas import SchemaModel, SchemaField
+        
+        tables = self.get_tables()
+        fks = self.get_all_foreign_keys()
+        
+        schema_models = []
+        
+        table_descriptions = {
+            "auth_users": "User registration and authentication table",
+            "user_profiles": "User profile details and contact information",
+            "blog_posts": "Blog posts published by users",
+            "post_comments": "Comments and ratings on blog posts"
+        }
+        
+        # Helper to convert table to model name
+        def table_to_model_name(t_name):
+            mapping = {
+                "auth_users": "User",
+                "user_profiles": "UserProfile",
+                "blog_posts": "BlogPost",
+                "post_comments": "PostComment"
+            }
+            if t_name in mapping:
+                return mapping[t_name]
+            return "".join(part.capitalize() for part in t_name.split("_"))
+
+        for table in tables:
+            model_name = table_to_model_name(table)
+            desc = table_descriptions.get(table, f"Dynamic schema for database table {table}")
+            row_est = self.get_row_estimate(table)
+            
+            # Fetch standard database columns
+            db_cols = self.get_columns(table)
+            fields = []
+            
+            for col in db_cols:
+                fields.append(SchemaField(
+                    name=col["name"],
+                    type=col["data_type"],
+                    kind=col["kind"],
+                    primaryKey=col["primary_key"],
+                    nullable=col["nullable"]
+                ))
+            
+            # Fetch catalog relationships
+            relations = self.get_relations(table, fks)
+            for rel in relations:
+                fields.append(SchemaField(
+                    name=rel["name"],
+                    type=rel["type"],
+                    kind=rel["kind"],
+                    relatedModel=rel["relatedModel"],
+                    relationType=rel["relationType"]
+                ))
+                
+            # Fetch sample data
+            samples = self.get_sample_data(table, limit=3)
+            
+            schema_models.append(SchemaModel(
+                name=model_name,
+                tableName=table,
+                description=desc,
+                rowEstimate=row_est,
+                fields=fields,
+                sampleRows=samples
+            ))
+            
+        return schema_models
+
     def close(self):
         self.cursor.close()

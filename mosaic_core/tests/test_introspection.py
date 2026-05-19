@@ -158,3 +158,29 @@ def test_introspector_get_sample_data():
             assert "username" in samples[0]
     finally:
         introspector.close()
+
+@pytest.mark.django_db
+def test_introspector_schema_mapping():
+    from mosaic_core.schemas import SchemaModel
+    introspector = PostgresIntrospector()
+    try:
+        models = introspector.introspect_schema()
+        assert len(models) > 0
+        assert all(isinstance(m, SchemaModel) for m in models)
+        
+        # Verify User model details
+        user_model = next(m for m in models if m.name == "User")
+        assert user_model.tableName == "auth_users"
+        assert user_model.description == "User registration and authentication table"
+        
+        # Verify there are fields and relations
+        field_names = [f.name for f in user_model.fields]
+        assert "email" in field_names
+        assert "posts" in field_names
+        
+        post_field = next(f for f in user_model.fields if f.name == "posts")
+        assert post_field.kind == "relation"
+        assert post_field.relatedModel == "BlogPost"
+        assert post_field.relationType == "one-to-many"
+    finally:
+        introspector.close()
