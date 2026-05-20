@@ -1,15 +1,16 @@
-from django.db import connection
+from django.db import connections
 import structlog
 
 logger = structlog.get_logger(__name__)
 
 class PostgresIntrospector:
     """
-    Introspects local PostgreSQL catalog system metadata to discover
+    Introspects PostgreSQL catalog system metadata to discover
     active schema tables, columns, indexes, and relationship constraints.
     """
-    def __init__(self):
-        self.cursor = connection.cursor()
+    def __init__(self, connection_alias='default'):
+        self.connection_alias = connection_alias
+        self.cursor = connections[connection_alias].cursor()
 
     def get_tables(self):
         """

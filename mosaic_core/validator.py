@@ -19,10 +19,11 @@ class DslValidator:
     Validates Query DSL syntax and schema structures against the active
     PostgreSQL catalog schema mappings, checking models, fields, operators, and relations.
     """
-    def __init__(self, schema_models: Optional[List[Any]] = None):
+    def __init__(self, schema_models: Optional[List[Any]] = None, connection_alias: str = 'default'):
+        self.connection_alias = connection_alias
         if schema_models is None:
             from mosaic_core.introspection import PostgresIntrospector
-            introspector = PostgresIntrospector()
+            introspector = PostgresIntrospector(connection_alias=connection_alias)
             try:
                 schema_models = introspector.introspect_schema()
             finally:
@@ -48,29 +49,37 @@ class DslValidator:
             }
 
         # Build indexes lookup dynamically from database to provide performance warnings
-        from django.db import connection
+        from django.db import connections
         try:
-            with connection.cursor() as cursor:
+            conn = connections[connection_alias]
+            vendor = conn.vendor
+            with conn.cursor() as cursor:
                 for model_name, info in self.models.items():
                     table_name = info["tableName"]
-                    # Query indexes from pg catalog
-                    query = """
-                        SELECT DISTINCT
-                            a.attname AS column_name
-                        FROM
-                            pg_class t
-                        JOIN
-                            pg_index ix ON t.oid = ix.indrelid
-                        JOIN
-                            pg_class i ON i.oid = ix.indexrelid
-                        JOIN
-                            pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
-                        WHERE
-                            t.relkind = 'r'
-                            AND t.relname = %s;
-                    """
-                    cursor.execute(query, [table_name])
-                    indexed_cols = {row[0] for row in cursor.fetchall()}
+                    
+                    if vendor == 'postgresql':
+                        # Query indexes from pg catalog
+                        query = """
+                            SELECT DISTINCT
+                                a.attname AS column_name
+                            FROM
+                                pg_class t
+                            JOIN
+                                pg_index ix ON t.oid = ix.indrelid
+                            JOIN
+                                pg_class i ON i.oid = ix.indexrelid
+                            JOIN
+                                pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
+                            WHERE
+                                t.relkind = 'r'
+                                AND t.relname = %s;
+                        """
+                        cursor.execute(query, [table_name])
+                        indexed_cols = {row[0] for row in cursor.fetchall()}
+                    else:
+                        # SQLite/MySQL basic fallback or empty
+                        indexed_cols = set()
+                        
                     info["indexed_fields"] = indexed_cols
         except Exception as e:
             logger.warning("failed_to_load_indexes_for_validation", error=str(e))

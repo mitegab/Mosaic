@@ -5,10 +5,11 @@ from mosaic_core.schemas import QueryDsl, QueryFilter, QueryFilterGroup, QueryRe
 logger = structlog.get_logger(__name__)
 
 class QueryCompiler:
-    def __init__(self, schema_models: Optional[List[Any]] = None):
+    def __init__(self, schema_models: Optional[List[Any]] = None, connection_alias: str = 'default'):
+        self.connection_alias = connection_alias
         if schema_models is None:
             from mosaic_core.introspection import PostgresIntrospector
-            introspector = PostgresIntrospector()
+            introspector = PostgresIntrospector(connection_alias=connection_alias)
             try:
                 schema_models = introspector.introspect_schema()
             finally:
@@ -26,7 +27,7 @@ class QueryCompiler:
             
         # Get all foreign keys for join resolution
         from mosaic_core.introspection import PostgresIntrospector
-        introspector = PostgresIntrospector()
+        introspector = PostgresIntrospector(connection_alias=connection_alias)
         try:
             self.fks = introspector.get_all_foreign_keys()
         finally:

@@ -3,6 +3,7 @@ from mosaic_core import views
 
 urlpatterns = [
     path('health/', views.health_check, name='health_check'),
+    path('connect/', views.connect_db, name='connect_db'),
     path('models/', views.models_list, name='models_list'),
     path('validate-query/', views.validate_query, name='validate_query'),
     path('query/', views.execute_query, name='execute_query'),

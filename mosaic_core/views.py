@@ -1,10 +1,11 @@
 import time
-from django.db import connection
+from django.db import connections
 from django.utils import timezone
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 import structlog
+from mosaic_core.connections import ConnectionManager
 from mosaic_core.introspection import PostgresIntrospector
 
 logger = structlog.get_logger(__name__)
@@ -13,7 +14,8 @@ logger = structlog.get_logger(__name__)
 def health_check(request):
     db_connected = False
     try:
-        with connection.cursor() as cursor:
+        alias = ConnectionManager.get_connection_alias(request)
+        with connections[alias].cursor() as cursor:
             cursor.execute("SELECT 1;")
             row = cursor.fetchone()
         if row and row[0] == 1:
@@ -28,10 +30,24 @@ def health_check(request):
     }, status=status.HTTP_200_OK)
 
 
+@api_view(['POST'])
+def connect_db(request):
+    try:
+        url = request.data.get('url')
+        if not url:
+            return Response({"error": "No database URL provided"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        ConnectionManager.test_connection(url)
+        return Response({"status": "connected"}, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({"error": f"Failed to connect: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+
+
 @api_view(['GET'])
 def models_list(request):
     try:
-        introspector = PostgresIntrospector()
+        alias = ConnectionManager.get_connection_alias(request)
+        introspector = PostgresIntrospector(connection_alias=alias)
         try:
             models = introspector.introspect_schema()
             serialized = introspector.serialize_schema(models)
@@ -41,7 +57,7 @@ def models_list(request):
     except Exception as e:
         logger.error("models_list_introspection_failed", error=str(e))
         return Response({
-            "error": "Failed to perform database schema introspection"
+            "error": f"Failed to perform database schema introspection: {str(e)}"
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -67,7 +83,8 @@ def validate_query(request):
             }, status=status.HTTP_200_OK)
             
         # 2. Run schema and semantic validation
-        validator = DslValidator()
+        alias = ConnectionManager.get_connection_alias(request)
+        validator = DslValidator(connection_alias=alias)
         res = validator.validate(dsl)
         return Response(res, status=status.HTTP_200_OK)
         
@@ -113,13 +130,14 @@ def execute_query(request):
             }, status=status.HTTP_200_OK)
 
         # 2. Compile query
-        compiler = QueryCompiler()
+        alias = ConnectionManager.get_connection_alias(request)
+        compiler = QueryCompiler(connection_alias=alias)
         sql, params, compile_logs = compiler.compile(dsl)
         logs.extend(compile_logs)
         
         # 3. Execute query
         start_execute = time.perf_counter()
-        with connection.cursor() as cursor:
+        with connections[alias].cursor() as cursor:
             cursor.execute(sql, params)
             columns = [col[0] for col in cursor.description] if cursor.description else []
             rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
@@ -127,7 +145,7 @@ def execute_query(request):
         logs.append(f"Query executed successfully returning {len(rows)} rows in {execution_time_ms}ms")
         
         # 4. Profile execution plan
-        profiler = PlanProfiler()
+        profiler = PlanProfiler(connection_alias=alias)
         plan, profiler_logs = profiler.profile_query(sql, params)
         logs.extend(profiler_logs)
         
