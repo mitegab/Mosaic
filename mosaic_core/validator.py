@@ -95,7 +95,7 @@ class DslValidator:
         # 3. Recursively validate select fields, filters, and relations
         self._validate_model_fields(
             dsl.model,
-            select=dsl.select,
+            select=dsl.select or dsl.output,
             filters=dsl.filters,
             relations=dsl.relations,
             errors=errors,
@@ -171,7 +171,7 @@ class DslValidator:
         indexed_fields = model_info["indexed_fields"]
 
         for filter_item in filters:
-            if hasattr(filter_item, "logic"):  # QueryFilterGroup
+            if hasattr(filter_item, "filters"):  # QueryFilterGroup
                 self._validate_filters(model_name, filter_item.filters, errors, warnings)
             else:  # QueryFilter
                 field_name = filter_item.field

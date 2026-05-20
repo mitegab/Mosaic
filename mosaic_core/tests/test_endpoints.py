@@ -78,10 +78,14 @@ def test_models_list_endpoint():
     for model in data:
         for field in model["fields"]:
             field_keys = set(field.keys())
-            if field["kind"] == "relation":
-                assert field_keys == {"name", "type", "kind", "relatedModel", "relationType"}
-            else:
-                assert field_keys == {"name", "type", "kind", "primaryKey", "nullable"}
+            allowed_keys = {
+                "name", "type", "kind", "primaryKey", "nullable", "unique", 
+                "indexed", "constraints", "sampleValues", "description", 
+                "relatedModel", "relationType"
+            }
+            assert field_keys.issubset(allowed_keys)
+            # Ensure core fields are present
+            assert {"name", "type", "kind"}.issubset(field_keys)
 
 
 

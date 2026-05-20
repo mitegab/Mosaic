@@ -429,17 +429,68 @@ class PostgresIntrospector:
             desc = table_descriptions.get(table, f"Dynamic schema for database table {table}")
             row_est = self.get_row_estimate(table)
             
+            # Fetch table constraints and indexes
+            table_constraints = self.get_constraints(table)
+            table_indexes = self.get_indexes(table)
+            
+            # Fetch sample data
+            samples = self.get_sample_data(table, limit=3)
+            
             # Fetch standard database columns
             db_cols = self.get_columns(table)
             fields = []
             
             for col in db_cols:
+                col_name = col["name"]
+                
+                # Extract sample values for this specific column
+                sample_vals = []
+                if samples:
+                    for row in samples:
+                        if col_name in row and row[col_name] is not None:
+                            # Handle non-serializable objects (like datetime or decimals) if necessary,
+                            # but simple types can go straight in.
+                            val = row[col_name]
+                            # If it's a datetime, serialize to string
+                            if hasattr(val, "isoformat"):
+                                val = val.isoformat()
+                            elif hasattr(val, "to_eng_string"):
+                                val = str(val)
+                            elif type(val).__name__ == "Decimal":
+                                val = float(val)
+                            sample_vals.append(val)
+                
+                # Check if unique
+                unique = col["primary_key"]
+                if col_name in table_constraints and any(c["type"] == "UNIQUE" for c in table_constraints[col_name]):
+                    unique = True
+                if col_name in table_indexes and any(idx["is_unique"] for idx in table_indexes[col_name]):
+                    unique = True
+                    
+                # Check if indexed
+                indexed = col["primary_key"]
+                if col_name in table_indexes:
+                    indexed = True
+                if col_name in table_constraints and any(c["type"] in ("PRIMARY KEY", "UNIQUE") for c in table_constraints[col_name]):
+                    indexed = True
+                    
+                # Collect constraint types
+                col_consts = []
+                if col_name in table_constraints:
+                    col_consts = list({c["type"] for c in table_constraints[col_name]})
+                if col["primary_key"] and "PRIMARY KEY" not in col_consts:
+                    col_consts.append("PRIMARY KEY")
+                    
                 fields.append(SchemaField(
-                    name=col["name"],
+                    name=col_name,
                     type=col["data_type"],
                     kind=col["kind"],
                     primaryKey=col["primary_key"],
-                    nullable=col["nullable"]
+                    nullable=col["nullable"],
+                    unique=unique,
+                    indexed=indexed,
+                    constraints=col_consts if col_consts else None,
+                    sampleValues=sample_vals if sample_vals else None
                 ))
             
             # Fetch catalog relationships
@@ -453,9 +504,6 @@ class PostgresIntrospector:
                     relationType=rel["relationType"]
                 ))
                 
-            # Fetch sample data
-            samples = self.get_sample_data(table, limit=3)
-            
             schema_models.append(SchemaModel(
                 name=model_name,
                 tableName=table,

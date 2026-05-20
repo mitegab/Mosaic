@@ -43,3 +43,39 @@ def models_list(request):
             "error": "Failed to perform database schema introspection"
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+@api_view(['POST'])
+def validate_query(request):
+    try:
+        from mosaic_core.schemas import QueryDsl
+        from mosaic_core.validator import DslValidator
+        from pydantic import ValidationError
+        
+        # 1. Parse JSON and validate structure using Pydantic
+        try:
+            dsl = QueryDsl.model_validate(request.data)
+        except ValidationError as ve:
+            errors = []
+            for err in ve.errors():
+                loc = " -> ".join(str(l) for l in err["loc"])
+                errors.append(f"Invalid DSL structure: at {loc}, {err['msg']}")
+            return Response({
+                "valid": False,
+                "errors": errors,
+                "warnings": []
+            }, status=status.HTTP_200_OK)
+            
+        # 2. Run schema and semantic validation
+        validator = DslValidator()
+        res = validator.validate(dsl)
+        return Response(res, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        logger.error("validate_query_failed", error=str(e))
+        return Response({
+            "valid": False,
+            "errors": [f"Internal validation error: {str(e)}"],
+            "warnings": []
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+

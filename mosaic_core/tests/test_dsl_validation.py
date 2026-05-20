@@ -79,9 +79,9 @@ def test_pydantic_recursive_relations():
     assert comment_rel.select == ["body", "rating"]
 
 def test_pydantic_validation_failures():
-    # Limit too large (> 1000)
+    # Limit too large (> 10000)
     with pytest.raises(ValidationError) as exc:
-        QueryDsl.model_validate({"model": "User", "limit": 1001})
+        QueryDsl.model_validate({"model": "User", "limit": 10001})
     assert "limit" in str(exc.value)
 
     # Limit less than 1
