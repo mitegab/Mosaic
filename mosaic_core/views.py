@@ -170,3 +170,44 @@ def execute_query(request):
             "logs": logs + [f"Execution error: {str(e)}"],
             "executionPlan": []
         }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+def ai_assistant(request):
+    try:
+        from mosaic_core.schemas import AiQueryRequest
+        from mosaic_core.ai import AiAssistantEngine
+        from pydantic import ValidationError
+
+        # 1. Validate the AiQueryRequest request body
+        try:
+            ai_req = AiQueryRequest.model_validate(request.data)
+        except ValidationError as ve:
+            errors = []
+            for err in ve.errors():
+                loc = " -> ".join(str(l) for l in err["loc"])
+                errors.append(f"Invalid AI request structure: at {loc}, {err['msg']}")
+            return Response({
+                "dsl": None,
+                "explanation": "Validation of the request payload failed.",
+                "suggestedIndexes": [],
+                "warnings": errors
+            }, status=status.HTTP_200_OK)
+
+        # 2. Invoke the server-side AI Engine
+        engine = AiAssistantEngine()
+        res = engine.process_request(
+            mode=ai_req.mode,
+            prompt=ai_req.prompt,
+            current_dsl=ai_req.currentDsl
+        )
+        return Response(res.model_dump(), status=status.HTTP_200_OK)
+
+    except Exception as e:
+        logger.error("ai_assistant_view_failed", error=str(e))
+        return Response({
+            "dsl": None,
+            "explanation": f"Internal server error: {str(e)}",
+            "suggestedIndexes": [],
+            "warnings": ["An unexpected backend error occurred."]
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

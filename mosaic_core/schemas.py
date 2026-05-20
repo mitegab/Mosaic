@@ -61,7 +61,20 @@ class QueryDsl(BaseModel):
     offset: Optional[int] = Field(None, ge=0)
     groups: Optional[List['QueryDsl']] = None
 
+class AiQueryRequest(BaseModel):
+    prompt: str
+    currentDsl: Optional[QueryDsl] = None
+    mode: Literal['generate', 'fix', 'optimize', 'sql-to-dsl', 'suggest-indexes']
+
+class AiQueryResponse(BaseModel):
+    dsl: Optional[QueryDsl] = None
+    explanation: str
+    suggestedIndexes: Optional[List[str]] = None
+    warnings: Optional[List[str]] = None
+
 # Rebuild recursive models in Pydantic v2
 QueryFilterGroup.model_rebuild()
 QueryRelation.model_rebuild()
 QueryDsl.model_rebuild()
+AiQueryRequest.model_rebuild()
+AiQueryResponse.model_rebuild()

@@ -135,9 +135,13 @@ class DslValidator:
             self._validate_filters(model_name, filters, errors, warnings)
 
         # Validate relations recursively
+        # Validate relations recursively
         if relations:
             for rel in relations:
-                rel_name = rel.relation
+                rel_name = rel.relation or rel.field
+                if not rel_name:
+                    errors.append("Relation definition is missing a relation name or field.")
+                    continue
                 if rel_name not in relations_map:
                     errors.append(f"Relation '{rel_name}' does not exist on model '{model_name}'.")
                 else:

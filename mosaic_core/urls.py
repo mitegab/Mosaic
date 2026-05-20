@@ -6,5 +6,6 @@ urlpatterns = [
     path('models/', views.models_list, name='models_list'),
     path('validate-query/', views.validate_query, name='validate_query'),
     path('query/', views.execute_query, name='execute_query'),
+    path('ai/', views.ai_assistant, name='ai_assistant'),
 ]
 
