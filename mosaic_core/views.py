@@ -1,3 +1,4 @@
+import time
 from django.db import connection
 from django.utils import timezone
 from rest_framework.decorators import api_view
@@ -79,3 +80,93 @@ def validate_query(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(['POST'])
+def execute_query(request):
+    start_overall = time.perf_counter()
+    logs = []
+    try:
+        from mosaic_core.schemas import QueryDsl
+        from mosaic_core.compiler import QueryCompiler
+        from mosaic_core.profiler import PlanProfiler
+        from mosaic_core.orm_generator import OrmGenerator
+        from pydantic import ValidationError
+        
+        # 1. Deserialize DSL
+        try:
+            dsl = QueryDsl.model_validate(request.data)
+        except ValidationError as ve:
+            errors = []
+            for err in ve.errors():
+                loc = " -> ".join(str(l) for l in err["loc"])
+                errors.append(f"Invalid DSL structure: at {loc}, {err['msg']}")
+            return Response({
+                "rows": [],
+                "metrics": {
+                    "executionTimeMs": 0,
+                    "rowsReturned": 0,
+                    "backendLatencyMs": round((time.perf_counter() - start_overall) * 1000, 2),
+                    "cacheHit": False
+                },
+                "orm": "Invalid DSL payload structure.",
+                "logs": [f"Validation error: {e}" for e in errors],
+                "executionPlan": []
+            }, status=status.HTTP_200_OK)
+
+        # 2. Compile query
+        compiler = QueryCompiler()
+        sql, params, compile_logs = compiler.compile(dsl)
+        logs.extend(compile_logs)
+        
+        # 3. Execute query
+        start_execute = time.perf_counter()
+        with connection.cursor() as cursor:
+            cursor.execute(sql, params)
+            columns = [col[0] for col in cursor.description] if cursor.description else []
+            rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        execution_time_ms = round((time.perf_counter() - start_execute) * 1000, 2)
+        logs.append(f"Query executed successfully returning {len(rows)} rows in {execution_time_ms}ms")
+        
+        # 4. Profile execution plan
+        profiler = PlanProfiler()
+        plan, profiler_logs = profiler.profile_query(sql, params)
+        logs.extend(profiler_logs)
+        
+        # 5. Translate ORMs
+        generator = OrmGenerator()
+        django_orm = generator.generate_django_orm(dsl)
+        sqlalchemy_orm = generator.generate_sqlalchemy(dsl)
+        prisma_orm = generator.generate_prisma(dsl)
+        orm_str = f"# Django ORM:\n{django_orm}\n\n# SQLAlchemy:\n{sqlalchemy_orm}\n\n# Prisma:\n{prisma_orm}"
+        
+        # 6. Build metrics
+        backend_latency = round((time.perf_counter() - start_overall) * 1000, 2)
+        metrics = {
+            "executionTimeMs": execution_time_ms,
+            "rowsReturned": len(rows),
+            "backendLatencyMs": backend_latency,
+            "cacheHit": False
+        }
+        
+        return Response({
+            "rows": rows,
+            "metrics": metrics,
+            "orm": orm_str,
+            "logs": logs,
+            "executionPlan": plan
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        logger.error("execute_query_failed", error=str(e))
+        backend_latency = round((time.perf_counter() - start_overall) * 1000, 2)
+        return Response({
+            "rows": [],
+            "metrics": {
+                "executionTimeMs": 0,
+                "rowsReturned": 0,
+                "backendLatencyMs": backend_latency,
+                "cacheHit": False
+            },
+            "orm": "Internal execution error occurred.",
+            "logs": logs + [f"Execution error: {str(e)}"],
+            "executionPlan": []
+        }, status=status.HTTP_200_OK)
